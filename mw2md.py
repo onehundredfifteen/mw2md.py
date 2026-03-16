@@ -30,17 +30,26 @@ def apply_lines(func, content):
 
 class MarkdownConverter:
 
-    def __init__(self, source, dest):
-        self.source = self._check_path(source)
+    def __init__(self, _lines: list[str], dest: str):
+        self.lines = _lines
         self.dest = dest
+
+    @classmethod
+    def fromContent(cls, content: str, dest: str):
+        return cls(content.splitlines(), dest)
+       
+    @classmethod
+    def fromFile(cls, source: str, dest: str):
+        _source = cls._check_path(cls, source)
+        
+        return cls(read_file(_source), dest)   
 
     def run(self):
 
-        # If printing to terminal, might pipe to file, must be quiet
         if self.dest:
-            print("Transforming MediWiki from '%s' to MarkDown syntax..." % self.source)
+            print(f"Transforming MediaWiki {self.dest} to MarkDown syntax...")
 
-        lines = read_file(self.source)
+        lines = self.lines
         lines = apply_lines(self._convert_headers, lines)()
         lines = apply_lines(self._convert_emphasis, lines)()
         lines = apply_lines(self._convert_links, lines)()
@@ -48,7 +57,6 @@ class MarkdownConverter:
         lines = apply_lines(self._convert_lists, lines)()
 
         if self.dest:
-            print("Writing output to %s" % self.dest)
             write_file(self.dest, ''.join(lines))
         else:
             print(''.join(lines))
@@ -76,8 +84,13 @@ class MarkdownConverter:
            [Slurm Commands](https://slurm.schedmd.com/pdfs/summary.pdf)
         '''
         # Internal Links and images convert to markdown
-        for match in re.findall("\[\[(.+\|.+)\]\]", line):
-            title, markdown = match.split('|')
+        for match in re.findall(r"\[\[(.+\|.+)\]\]", line):
+            parts = match.split('|')
+            if len(parts) == 2:
+                title, markdown = parts
+            else:
+                title = markdown = parts[0]
+            
 
             # If it's an image, the title is the filename
             if re.search("^(F|f)ile:", title):
@@ -92,7 +105,7 @@ class MarkdownConverter:
  
             line = line.replace("[[%s]]" % match, markdown)
              
-        markup_regex = '\[(http[s]?://.+?)\]'
+        markup_regex = r'\[(http[s]?://.+?)\]'
 
         # First address external links
         for match in re.findall(markup_regex, line):
@@ -150,17 +163,4 @@ class MarkdownConverter:
         else:
             raise ValueError("Cannot access file at '%s'" % path)
  
-if __name__=="__main__":
-    if len(sys.argv) == 1:
-        print("Input file is required!\n")
-        print("Usage: python rst2md.py input [output]")
-        sys.exit(1)
 
-    source = sys.argv[1]
-
-    dest = None
-    if len(sys.argv) > 2:
-        dest = sys.argv[2]
-
-    converter = MarkdownConverter(source, dest)
-    converter.run()
